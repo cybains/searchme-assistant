@@ -27,49 +27,35 @@ def embed_documents(documents):
     return embeddings
 
 # Retrieve the most relevant documents from FAISS index
-# Retrieve the most relevant documents from FAISS index
 def retrieve_documents(query, top_k=5):
     query_embedding = embed_model.encode([query], convert_to_tensor=True)
     query_embedding = query_embedding.cpu().numpy()
-
+    
     # Search FAISS index for the top_k most relevant documents
     distances, indices = index.search(query_embedding, top_k)
-
+    
     documents = []
     for idx in indices[0]:
         filename = os.listdir(DATA_FOLDER)[idx]
-        with open(os.path.join(DATA_FOLDER, filename), 'r', encoding='utf-8') as f:  # Specify encoding
+        with open(os.path.join(DATA_FOLDER, filename), 'r') as f:
             documents.append(f.read())
-
+    
     return documents
 
-
 def generate_response(query, documents):
-    # Combine documents into one context string
+    # Concatenate the documents (context) into a single string
     context = " ".join(documents)
-
-    # Build full input
-    input_text = context + " " + query
-
-    # Tokenize with truncation
-    inputs = tokenizer(
-        input_text,
-        return_tensors="pt",
-        truncation=True,
-        max_length=1024,  # BART's max
-    )
-
-    # Move to correct device
-    inputs = {k: v.to(generator.model.device) for k, v in inputs.items()}
-
-    # Generate output
-    with torch.no_grad():
-        outputs = generator.model.generate(**inputs, max_length=150)
-
-    # Decode result
-    generated_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
+    
+    # Combine context and query into a single input text
+    input_text = context + " " + query  # Ensure it's a single string
+    
+    # Generate the output using the pipeline
+    outputs = generator(input_text, max_length=50, num_return_sequences=1, do_sample=True)
+    
+    # Get the generated response
+    generated_text = outputs[0]['generated_text']
+    
     return generated_text
-
 
 # Main function for the RAG pipeline
 def rag_pipeline(query):

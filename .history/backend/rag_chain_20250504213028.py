@@ -12,7 +12,7 @@ MODEL_NAME = 'facebook/bart-base'  # Change to your desired Hugging Face model (
 EMBEDDING_MODEL = 'all-MiniLM-L6-v2'  # Use a sentence transformer model for embedding
 
 # Initialize the Hugging Face model for text generation
-generator = pipeline('text2text-generation', model=MODEL_NAME, device=0 if torch.cuda.is_available() else -1)
+generator = pipeline('text-generation', model=MODEL_NAME, device=0 if torch.cuda.is_available() else -1)
 tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
 
 # Load the SentenceTransformer model for document embeddings
@@ -27,48 +27,37 @@ def embed_documents(documents):
     return embeddings
 
 # Retrieve the most relevant documents from FAISS index
-# Retrieve the most relevant documents from FAISS index
 def retrieve_documents(query, top_k=5):
     query_embedding = embed_model.encode([query], convert_to_tensor=True)
     query_embedding = query_embedding.cpu().numpy()
-
+    
     # Search FAISS index for the top_k most relevant documents
     distances, indices = index.search(query_embedding, top_k)
-
+    
     documents = []
     for idx in indices[0]:
         filename = os.listdir(DATA_FOLDER)[idx]
-        with open(os.path.join(DATA_FOLDER, filename), 'r', encoding='utf-8') as f:  # Specify encoding
+        with open(os.path.join(DATA_FOLDER, filename), 'r') as f:
             documents.append(f.read())
-
+    
     return documents
 
-
+# Generate a response using the retrieved documents
 def generate_response(query, documents):
-    # Combine documents into one context string
-    context = " ".join(documents)
+    context = " ".join(documents)  # Join documents into a single string
+    input_text = context + " " + query  # Concatenate context and query into a string
+    
+    # Ensure that input_text is a string, in case it's a tensor
+    input_text = str(input_text)
+    
+    # Tokenize the input text
+    inputs = tokenizer(input_text, return_tensors='pt', truncation=True, max_length=1024)
 
-    # Build full input
-    input_text = context + " " + query
+    # Generate response using the model
+    generated = generator(inputs['input_ids'], max_length=150, num_return_sequences=1, do_sample=True)
+    
+    return generated[0]['generated_text']
 
-    # Tokenize with truncation
-    inputs = tokenizer(
-        input_text,
-        return_tensors="pt",
-        truncation=True,
-        max_length=1024,  # BART's max
-    )
-
-    # Move to correct device
-    inputs = {k: v.to(generator.model.device) for k, v in inputs.items()}
-
-    # Generate output
-    with torch.no_grad():
-        outputs = generator.model.generate(**inputs, max_length=150)
-
-    # Decode result
-    generated_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
-    return generated_text
 
 
 # Main function for the RAG pipeline

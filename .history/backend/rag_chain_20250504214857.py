@@ -27,22 +27,20 @@ def embed_documents(documents):
     return embeddings
 
 # Retrieve the most relevant documents from FAISS index
-# Retrieve the most relevant documents from FAISS index
 def retrieve_documents(query, top_k=5):
     query_embedding = embed_model.encode([query], convert_to_tensor=True)
     query_embedding = query_embedding.cpu().numpy()
-
+    
     # Search FAISS index for the top_k most relevant documents
     distances, indices = index.search(query_embedding, top_k)
-
+    
     documents = []
     for idx in indices[0]:
         filename = os.listdir(DATA_FOLDER)[idx]
-        with open(os.path.join(DATA_FOLDER, filename), 'r', encoding='utf-8') as f:  # Specify encoding
+        with open(os.path.join(DATA_FOLDER, filename), 'r') as f:
             documents.append(f.read())
-
+    
     return documents
-
 
 def generate_response(query, documents):
     # Combine documents into one context string

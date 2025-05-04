@@ -31,19 +31,11 @@ def ingest():
     data_folder = "data/"
     for filename in os.listdir(data_folder):
         if filename.endswith(".txt"):  # Example file type
-            file_path = os.path.join(data_folder, filename)
-            try:
-                with open(file_path, "r", encoding="utf-8") as file:
-                    documents.append(file.read())
-            except UnicodeDecodeError:
-                print(f"Error reading file {filename}. Skipping...")
-                continue
+            with open(os.path.join(data_folder, filename), "r") as file:
+                documents.append(file.read())
 
-    if documents:  # Only proceed if there are documents
-        embeddings = embed_documents(documents)
-        save_embeddings(embeddings)
-    else:
-        print("No documents were successfully loaded.")
+    embeddings = embed_documents(documents)
+    save_embeddings(embeddings)
 
 if __name__ == "__main__":
     ingest()
