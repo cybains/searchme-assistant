@@ -4,7 +4,7 @@ import faiss
 import numpy as np
 import textwrap
 from transformers import pipeline, AutoModelForSeq2SeqLM, AutoTokenizer
-from sentence_transformers import SentenceTransformer
+from sentence_transformers import SentenceTransformer, CrossEncoder
 import torch
 
 # Constants
@@ -21,14 +21,15 @@ tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
 # Load FAISS index
 index = faiss.read_index(VECTORSTORE_PATH)
 
+# CrossEncoder for ranking chunks
+cross_encoder = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
+
 def clean_text(text):
-    """Clean up the text by removing extra spaces and line breaks."""
     text = text.replace('\n', ' ')
     text = re.sub(r'\s+', ' ', text)
     return text.strip()
 
 def preprocess_and_chunk(text, chunk_size=500, overlap=100):
-    """Preprocess the text and split it into chunks."""
     sentences = re.split(r'(?<=[.!?]) +', text.strip())
     chunks, current_chunk = [], ""
     for sentence in sentences:
@@ -49,11 +50,9 @@ def preprocess_and_chunk(text, chunk_size=500, overlap=100):
     return overlapped_chunks
 
 def embed_documents(documents):
-    """Generate embeddings for the documents."""
     return embed_model.encode(documents, convert_to_tensor=True)
 
 def retrieve_documents(query, top_k=5):
-    """Retrieve the top_k relevant documents for the query."""
     with open("vectorstore/documents.txt", "r", encoding="utf-8") as f:
         all_chunks = f.readlines()
 
@@ -68,8 +67,26 @@ def retrieve_documents(query, top_k=5):
         retrieved_docs.append(chunk)
     return retrieved_docs
 
+def filter_chunks(chunks, query_keywords):
+    """
+    Filters out irrelevant chunks by checking for keyword overlap.
+    """
+    filtered = []
+    for chunk in chunks:
+        if any(keyword.lower() in chunk.lower() for keyword in query_keywords):
+            filtered.append(chunk)
+    return filtered or chunks  # Fallback: if nothing matches, use all
+
+def rerank_chunks(chunks, query):
+    """
+    Reranks chunks using a cross-encoder model.
+    """
+    pairs = [[query, chunk] for chunk in chunks]
+    scores = cross_encoder.predict(pairs)
+    sorted_chunks = [x for _, x in sorted(zip(scores, chunks), key=lambda pair: pair[0], reverse=True)]
+    return sorted_chunks
+
 def format_prompt(context_docs, user_query):
-    """Format the prompt by including the context and user query."""
     context = "\n\n".join(context_docs)
     prompt = f"""You are an assistant answering user questions based on Portuguese immigration laws. 
 You are not an official of the Ministry of Education.
@@ -84,31 +101,34 @@ Question: {user_query}
 Answer:"""
     return prompt
 
-def generate_response(query, documents, max_context=5):
-    selected_docs = documents[:max_context]  # Grab more documents to provide a better context
+def generate_response(query, documents, max_context=3):
+    selected_docs = documents[:max_context]
     prompt = format_prompt(selected_docs, query)
 
-    # Increase the max_length for tokenization to accommodate larger prompts
-    inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=1024, padding=True)
+    inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=512, padding=True)
     inputs = {k: v.to(generator.model.device) for k, v in inputs.items()}
 
     with torch.no_grad():
         outputs = generator.model.generate(
             **inputs,
             max_length=300,
-            num_beams=5,  # Increase beams for better response generation
-            do_sample=True,  # Enable sampling to use temperature
-            temperature=0.7,  # Control the randomness in the output
+            num_beams=4,
             early_stopping=True,
         )
 
     return tokenizer.decode(outputs[0], skip_special_tokens=True)
 
 def rag_pipeline(query):
-    """Complete RAG pipeline to retrieve relevant documents and generate a response."""
     relevant_docs = retrieve_documents(query)
-    response = generate_response(query, relevant_docs)
-    return response
+    
+    # Keywords for filtering relevant chunks
+    keywords = ["student", "residence permit", "higher education", "article 91", "study programme"]
+    filtered_docs = filter_chunks(relevant_docs, keywords)
+    
+    # Optional: Rerank the filtered chunks using the cross-encoder
+    reranked_docs = rerank_chunks(filtered_docs, query)
+    
+    return generate_response(query, reranked_docs)
 
 if __name__ == "__main__":
     query = "What is the validity of a resident permit for students?"

@@ -22,13 +22,11 @@ tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
 index = faiss.read_index(VECTORSTORE_PATH)
 
 def clean_text(text):
-    """Clean up the text by removing extra spaces and line breaks."""
     text = text.replace('\n', ' ')
     text = re.sub(r'\s+', ' ', text)
     return text.strip()
 
 def preprocess_and_chunk(text, chunk_size=500, overlap=100):
-    """Preprocess the text and split it into chunks."""
     sentences = re.split(r'(?<=[.!?]) +', text.strip())
     chunks, current_chunk = [], ""
     for sentence in sentences:
@@ -49,11 +47,9 @@ def preprocess_and_chunk(text, chunk_size=500, overlap=100):
     return overlapped_chunks
 
 def embed_documents(documents):
-    """Generate embeddings for the documents."""
     return embed_model.encode(documents, convert_to_tensor=True)
 
 def retrieve_documents(query, top_k=5):
-    """Retrieve the top_k relevant documents for the query."""
     with open("vectorstore/documents.txt", "r", encoding="utf-8") as f:
         all_chunks = f.readlines()
 
@@ -69,7 +65,6 @@ def retrieve_documents(query, top_k=5):
     return retrieved_docs
 
 def format_prompt(context_docs, user_query):
-    """Format the prompt by including the context and user query."""
     context = "\n\n".join(context_docs)
     prompt = f"""You are an assistant answering user questions based on Portuguese immigration laws. 
 You are not an official of the Ministry of Education.
@@ -84,31 +79,27 @@ Question: {user_query}
 Answer:"""
     return prompt
 
-def generate_response(query, documents, max_context=5):
-    selected_docs = documents[:max_context]  # Grab more documents to provide a better context
+def generate_response(query, documents, max_context=3):
+    selected_docs = documents[:max_context]
     prompt = format_prompt(selected_docs, query)
 
-    # Increase the max_length for tokenization to accommodate larger prompts
-    inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=1024, padding=True)
+    inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=512, padding=True)
     inputs = {k: v.to(generator.model.device) for k, v in inputs.items()}
 
     with torch.no_grad():
         outputs = generator.model.generate(
             **inputs,
             max_length=300,
-            num_beams=5,  # Increase beams for better response generation
-            do_sample=True,  # Enable sampling to use temperature
-            temperature=0.7,  # Control the randomness in the output
+            num_beams=4,
             early_stopping=True,
         )
 
     return tokenizer.decode(outputs[0], skip_special_tokens=True)
 
+
 def rag_pipeline(query):
-    """Complete RAG pipeline to retrieve relevant documents and generate a response."""
     relevant_docs = retrieve_documents(query)
-    response = generate_response(query, relevant_docs)
-    return response
+    return generate_response(query, relevant_docs)
 
 if __name__ == "__main__":
     query = "What is the validity of a resident permit for students?"

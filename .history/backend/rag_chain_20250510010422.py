@@ -3,7 +3,7 @@ import re
 import faiss
 import numpy as np
 import textwrap
-from transformers import pipeline, AutoModelForSeq2SeqLM, AutoTokenizer
+from transformers import pipeline, AutoTokenizer
 from sentence_transformers import SentenceTransformer
 import torch
 
@@ -74,7 +74,7 @@ def format_prompt(context_docs, user_query):
     prompt = f"""You are an assistant answering user questions based on Portuguese immigration laws. 
 You are not an official of the Ministry of Education.
 
-Answer the following question strictly based on the context provided. Be clear and avoid generic responses.
+Answer the following question strictly based on the context provided. Be clear, detailed, and avoid generic responses.
 
 Context:
 {context}
@@ -95,7 +95,7 @@ def generate_response(query, documents, max_context=5):
     with torch.no_grad():
         outputs = generator.model.generate(
             **inputs,
-            max_length=300,
+            max_length=600,  # Increase max length for more detailed answers
             num_beams=5,  # Increase beams for better response generation
             do_sample=True,  # Enable sampling to use temperature
             temperature=0.7,  # Control the randomness in the output

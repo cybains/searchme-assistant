@@ -84,21 +84,19 @@ Question: {user_query}
 Answer:"""
     return prompt
 
-def generate_response(query, documents, max_context=5):
-    selected_docs = documents[:max_context]  # Grab more documents to provide a better context
+def generate_response(query, documents, max_context=3):
+    """Generate a response using the context and the query."""
+    selected_docs = documents[:max_context]
     prompt = format_prompt(selected_docs, query)
 
-    # Increase the max_length for tokenization to accommodate larger prompts
-    inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=1024, padding=True)
+    inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=512, padding=True)
     inputs = {k: v.to(generator.model.device) for k, v in inputs.items()}
 
     with torch.no_grad():
         outputs = generator.model.generate(
             **inputs,
-            max_length=300,
-            num_beams=5,  # Increase beams for better response generation
-            do_sample=True,  # Enable sampling to use temperature
-            temperature=0.7,  # Control the randomness in the output
+            max_length=500,  # Increase max length here
+            num_beams=4,
             early_stopping=True,
         )
 
@@ -107,8 +105,7 @@ def generate_response(query, documents, max_context=5):
 def rag_pipeline(query):
     """Complete RAG pipeline to retrieve relevant documents and generate a response."""
     relevant_docs = retrieve_documents(query)
-    response = generate_response(query, relevant_docs)
-    return response
+    return generate_response(query, relevant_docs)
 
 if __name__ == "__main__":
     query = "What is the validity of a resident permit for students?"

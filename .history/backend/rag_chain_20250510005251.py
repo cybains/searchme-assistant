@@ -85,7 +85,7 @@ Answer:"""
     return prompt
 
 def generate_response(query, documents, max_context=5):
-    selected_docs = documents[:max_context]  # Grab more documents to provide a better context
+    selected_docs = documents[:max_context]  # Grab more documents
     prompt = format_prompt(selected_docs, query)
 
     # Increase the max_length for tokenization to accommodate larger prompts
@@ -113,3 +113,4 @@ def rag_pipeline(query):
 if __name__ == "__main__":
     query = "What is the validity of a resident permit for students?"
     print("\n🧠 Response:\n", rag_pipeline(query))
+

@@ -84,8 +84,8 @@ Question: {user_query}
 Answer:"""
     return prompt
 
-def generate_response(query, documents, max_context=5):
-    selected_docs = documents[:max_context]  # Grab more documents to provide a better context
+def generate_response(query, documents, max_context=5):  # Increase max_context to 5
+    selected_docs = documents[:max_context]  # Grab more documents
     prompt = format_prompt(selected_docs, query)
 
     # Increase the max_length for tokenization to accommodate larger prompts
@@ -96,9 +96,7 @@ def generate_response(query, documents, max_context=5):
         outputs = generator.model.generate(
             **inputs,
             max_length=300,
-            num_beams=5,  # Increase beams for better response generation
-            do_sample=True,  # Enable sampling to use temperature
-            temperature=0.7,  # Control the randomness in the output
+            num_beams=4,
             early_stopping=True,
         )
 
@@ -113,3 +111,4 @@ def rag_pipeline(query):
 if __name__ == "__main__":
     query = "What is the validity of a resident permit for students?"
     print("\n🧠 Response:\n", rag_pipeline(query))
+
