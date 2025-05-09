@@ -75,6 +75,7 @@ def format_prompt(context_docs, user_query):
 You are an assistant answering user questions based on Portuguese immigration laws. 
 Your task is to provide detailed answers based on the following context, and if necessary, reference the specific sections or documents.
 
+
 Context:
 {context}
 
@@ -83,7 +84,6 @@ Question: {user_query}
 Answer with full details, including the validity period, renewal options, and any other relevant information related to student residence permits.
 """
 
-    return prompt
 
 def generate_response(query, documents, max_context=7):
     selected_docs = documents[:max_context]  # Grab more documents to provide a better context

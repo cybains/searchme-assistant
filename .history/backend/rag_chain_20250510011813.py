@@ -52,21 +52,7 @@ def embed_documents(documents):
     """Generate embeddings for the documents."""
     return embed_model.encode(documents, convert_to_tensor=True)
 
-def retrieve_documents(query, top_k=5):
-    """Retrieve the top_k relevant documents for the query."""
-    with open("vectorstore/documents.txt", "r", encoding="utf-8") as f:
-        all_chunks = f.readlines()
 
-    query_embedding = embed_model.encode([query], convert_to_tensor=False)
-    distances, indices = index.search(np.array(query_embedding), top_k)
-
-    print(f"\n🔍 Top Retrieved Chunks for Query: '{query}'\n")
-    retrieved_docs = []
-    for i, (idx, score) in enumerate(zip(indices[0], distances[0])):
-        chunk = clean_text(all_chunks[idx])
-        print(f"# {i + 1} [Index {idx}] (Distance: {score:.4f}):\n{textwrap.fill(chunk, width=100)}\n")
-        retrieved_docs.append(chunk)
-    return retrieved_docs
 
 def format_prompt(context_docs, user_query):
     """Format the prompt by including the context and user query."""

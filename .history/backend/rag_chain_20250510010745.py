@@ -71,18 +71,17 @@ def retrieve_documents(query, top_k=5):
 def format_prompt(context_docs, user_query):
     """Format the prompt by including the context and user query."""
     context = "\n\n".join(context_docs)
-    prompt = f"""
-You are an assistant answering user questions based on Portuguese immigration laws. 
-Your task is to provide detailed answers based on the following context, and if necessary, reference the specific sections or documents.
+    prompt = f"""You are an assistant answering user questions based on Portuguese immigration laws. 
+You are not an official of the Ministry of Education.
+
+Answer the following question strictly based on the context provided. Be clear and avoid generic responses.
 
 Context:
 {context}
 
 Question: {user_query}
 
-Answer with full details, including the validity period, renewal options, and any other relevant information related to student residence permits.
-"""
-
+Answer:"""
     return prompt
 
 def generate_response(query, documents, max_context=7):
