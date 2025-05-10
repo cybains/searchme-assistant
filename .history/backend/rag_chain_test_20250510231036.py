@@ -114,7 +114,7 @@ Your task is to answer the user's question clearly and in detail, using the cont
 
 4. If the action is possible, provide a list of actionable steps the user needs to follow, including necessary documents, procedures, or contacts.
 
-5. End with an open-ended question to encourage the user to ask for further clarification or additional information.
+End with an open-ended question to encourage the user to ask for further clarification or additional information.
 Context:
 {context}
 

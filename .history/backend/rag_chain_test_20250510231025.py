@@ -108,13 +108,13 @@ Your task is to answer the user's question clearly and in detail, using the cont
 
 1. Provide a clear Yes or No answer based on the context of the question. But never say "yes" or "no" directly. Instead, use phrases like "It is possible to..." or "It is not possible to...".
 
-2. Clarify any conditions or restrictions that may apply in this case, offering an explanation of the possibility or limitations of the action.
+Clarify any conditions or restrictions that may apply in this case, offering an explanation of the possibility or limitations of the action.
 
-3. Specify the relevant law or regulation under which this action falls, referring to any legal framework, articles, or rules governing the process.
+Specify the relevant law or regulation under which this action falls, referring to any legal framework, articles, or rules governing the process.
 
-4. If the action is possible, provide a list of actionable steps the user needs to follow, including necessary documents, procedures, or contacts.
+If the action is possible, provide a list of actionable steps the user needs to follow, including necessary documents, procedures, or contacts.
 
-5. End with an open-ended question to encourage the user to ask for further clarification or additional information.
+End with an open-ended question to encourage the user to ask for further clarification or additional information.
 Context:
 {context}
 

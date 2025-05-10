@@ -1,7 +1,6 @@
 import time
 import os
 import re
-import random
 import faiss
 import numpy as np
 import textwrap
@@ -76,51 +75,20 @@ def retrieve_documents(query, top_k=5):
 
 
 
-
-
 def format_prompt(context_docs, user_query):
     """Format the prompt by including the context and user query."""
-    
-    # Join the context documents into a single string
     context = "\n\n".join(context_docs)
-    
-    # Possible variations in response starters
-    response_starters = [
-        "You need",
-        "To move forward, you need",
-        "It’s essential to",
-        "In order to proceed, you need",
-        "The next step is",
-        "Here’s what you should do",
-        "You’ll want to make sure you have",
-        "To get started, you need",
-        "The required steps are"
-    ]
-    
-    # Randomly choose one response starter
-    response_start = random.choice(response_starters)
-    
-    # Create the prompt template with more detailed instructions
     prompt = f"""
-You are a helpful assistant specialized in Portuguese immigration law. 
+You are a helpful assistant specialized in Portuguese immigration law.
 
-Your task is to answer the user's question clearly and in detail, using the context provided and grammatically correct and also provide list whenever required to list documents or requirements. Follow these guidelines:
+Use the context below to answer the user's question. If relevant, refer to specific articles (e.g. Article 91 or 62) or conditions (such as proof of legal entry, criminal record checks, or required documents). Respond in clear and natural language.
 
-1. Provide a clear Yes or No answer based on the context of the question. But never say "yes" or "no" directly. Instead, use phrases like "It is possible to..." or "It is not possible to...".
-
-2. Clarify any conditions or restrictions that may apply in this case, offering an explanation of the possibility or limitations of the action.
-
-3. Specify the relevant law or regulation under which this action falls, referring to any legal framework, articles, or rules governing the process.
-
-4. If the action is possible, provide a list of actionable steps the user needs to follow, including necessary documents, procedures, or contacts.
-
-5. End with an open-ended question to encourage the user to ask for further clarification or additional information.
 Context:
 {context}
 
 User Question: {user_query}
 
-Answer: {response_start}
+Answer:
 """
 
     return prompt
@@ -187,17 +155,6 @@ if __name__ == "__main__":
     "What kind of proof of accommodation is needed for high school exchange students?",
     "Do I need to provide the name and address of my host family?",
     "Can this residence permit be applied for while already in Portugal?",
-    "Can I get a residence permit for an internship in Portugal?",
-    "What documents are needed for an internship residence permit?",
-    "Is the internship supposed to be unpaid to qualify for the permit?",
-    "Can I apply for an internship residence permit from inside Portugal?",
-    "Is the internship residence permit valid for more than one year?",
-    "Can I renew my internship permit if my program continues?",
-    "What must be included in the internship contract?",
-    "Do I need to show financial means for an internship permit?",
-    "Do I need a Portuguese criminal record check for this permit?",
-    "Will a criminal record from my country affect my application?",
-    "Can I still apply if I don't have a visa but entered Portugal legally?"
     ]
 
     for i, query in enumerate(test_queries, 1):

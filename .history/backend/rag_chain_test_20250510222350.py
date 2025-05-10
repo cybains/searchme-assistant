@@ -1,7 +1,6 @@
 import time
 import os
 import re
-import random
 import faiss
 import numpy as np
 import textwrap
@@ -76,51 +75,28 @@ def retrieve_documents(query, top_k=5):
 
 
 
-
-
 def format_prompt(context_docs, user_query):
     """Format the prompt by including the context and user query."""
     
     # Join the context documents into a single string
     context = "\n\n".join(context_docs)
-    
-    # Possible variations in response starters
-    response_starters = [
-        "You need",
-        "To move forward, you need",
-        "It’s essential to",
-        "In order to proceed, you need",
-        "The next step is",
-        "Here’s what you should do",
-        "You’ll want to make sure you have",
-        "To get started, you need",
-        "The required steps are"
-    ]
-    
-    # Randomly choose one response starter
-    response_start = random.choice(response_starters)
-    
-    # Create the prompt template with more detailed instructions
+
+    # Create the prompt template
     prompt = f"""
-You are a helpful assistant specialized in Portuguese immigration law. 
+You are a helpful assistant specialized in Portuguese immigration law.
 
-Your task is to answer the user's question clearly and in detail, using the context provided and grammatically correct and also provide list whenever required to list documents or requirements. Follow these guidelines:
+Your goal is to answer the user's question based on the context provided. Ensure the following:
+1. Only refer to the context if it directly addresses the user's question.
+2. If you can reference specific articles or legal conditions (e.g., Article 91, proof of legal entry, criminal record checks), include those in your answer.
+3. Provide a clear, natural, and complete response. Avoid vague answers like "yes" or "no" without context. If the context doesn't cover the user's query, politely say: "I don't know based on the available information."
+4. If the context contains conflicting or unclear information, explain it.
 
-1. Provide a clear Yes or No answer based on the context of the question. But never say "yes" or "no" directly. Instead, use phrases like "It is possible to..." or "It is not possible to...".
-
-2. Clarify any conditions or restrictions that may apply in this case, offering an explanation of the possibility or limitations of the action.
-
-3. Specify the relevant law or regulation under which this action falls, referring to any legal framework, articles, or rules governing the process.
-
-4. If the action is possible, provide a list of actionable steps the user needs to follow, including necessary documents, procedures, or contacts.
-
-5. End with an open-ended question to encourage the user to ask for further clarification or additional information.
 Context:
 {context}
 
 User Question: {user_query}
 
-Answer: {response_start}
+Answer:
 """
 
     return prompt
