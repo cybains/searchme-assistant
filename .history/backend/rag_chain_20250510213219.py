@@ -1,0 +1,140 @@
+import time
+import os
+import re
+import faiss
+import numpy as np
+import textwrap
+from transformers import pipeline, AutoModelForSeq2SeqLM, AutoTokenizer
+from sentence_transformers import SentenceTransformer
+import torch
+
+# Constants
+DATA_FOLDER = "data/"
+VECTORSTORE_PATH = "vectorstore/faiss.index"
+EMBEDDING_MODEL = 'BAAI/bge-base-en-v1.5'
+MODEL_NAME = 'google/flan-t5-large'  # For example
+
+# Load models
+embed_model = SentenceTransformer(EMBEDDING_MODEL)
+generator = pipeline('text2text-generation', model=MODEL_NAME, device=0 if torch.cuda.is_available() else -1)
+tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+
+# Load FAISS index
+index = faiss.read_index(VECTORSTORE_PATH)
+
+def clean_text(text):
+    """Clean up the text by removing extra spaces and line breaks."""
+    text = text.replace('\n', ' ')
+    text = re.sub(r'\s+', ' ', text)
+    return text.strip()
+
+def preprocess_and_chunk(text, chunk_size=500, overlap=100):
+    """Preprocess the text and split it into chunks."""
+    sentences = re.split(r'(?<=[.!?]) +', text.strip())
+    chunks, current_chunk = [], ""
+    for sentence in sentences:
+        if len(current_chunk) + len(sentence) <= chunk_size:
+            current_chunk += " " + sentence
+        else:
+            chunks.append(current_chunk.strip())
+            current_chunk = sentence
+    if current_chunk:
+        chunks.append(current_chunk.strip())
+
+    # Add overlaps
+    overlapped_chunks = []
+    for i in range(0, len(chunks), 1):
+        chunk = ' '.join(chunks[max(0, i - 1):i + 1])
+        if chunk not in overlapped_chunks:
+            overlapped_chunks.append(chunk)
+    return overlapped_chunks
+
+def embed_documents(documents):
+    """Generate embeddings for the documents."""
+    return embed_model.encode(documents, convert_to_tensor=True)
+
+def retrieve_documents(query, top_k=5):
+    """Retrieve the top_k relevant documents for the query."""
+    with open("vectorstore/documents.txt", "r", encoding="utf-8") as f:
+        all_chunks = f.readlines()
+
+    query_embedding = embed_model.encode([query], convert_to_tensor=False)
+    distances, indices = index.search(np.array(query_embedding), top_k)
+
+    # Commented out to prevent printing
+    # print(f"\n🔍 Top Retrieved Chunks for Query: '{query}'\n")
+
+    retrieved_docs = []
+    for i, (idx, score) in enumerate(zip(indices[0], distances[0])):
+        chunk = clean_text(all_chunks[idx])
+        # Commented out to prevent printing
+        # print(f"# {i + 1} [Index {idx}] (Distance: {score:.4f}):\n{textwrap.fill(chunk, width=100)}\n")
+        retrieved_docs.append(chunk)
+    return retrieved_docs
+
+
+def format_prompt(context_docs, user_query):
+    """Format the prompt by including the context and user query."""
+    context = "\n\n".join(context_docs)
+    prompt = f"""
+You are a helpful assistant specialized in Portuguese immigration law.
+
+Use the context below to answer the user's question. If relevant, refer to specific articles (e.g. Article 91 or 62) or conditions (such as proof of legal entry, criminal record checks, or required documents). Respond in clear and natural language.
+
+Context:
+{context}
+
+User Question: {user_query}
+
+Answer:
+"""
+
+    return prompt
+
+import time  # Make sure this is at the top of your script
+
+def generate_response(query, documents, max_context=7):
+    selected_docs = documents[:max_context]  # Grab more documents to provide a better context
+    prompt = format_prompt(selected_docs, query)
+
+    # Increase the max_length for tokenization to accommodate larger prompts
+    inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=1024, padding=True)
+    inputs = {k: v.to(generator.model.device) for k, v in inputs.items()}
+
+    start_time = time.time()  # Start timing here
+
+    with torch.no_grad():
+        outputs = generator.model.generate(
+            **inputs,
+            max_length=800,
+            num_beams=5,  # Increase beams for better response generation
+            do_sample=True,  # Enable sampling to use temperature
+            temperature=0.7,  # Control the randomness in the output
+            early_stopping=True,
+        )
+
+    end_time = time.time()  # End timing here
+    print(f"🕒 Response Generation Time: {end_time - start_time:.2f} seconds")
+
+    return tokenizer.decode(outputs[0], skip_special_tokens=True)
+
+def rag_pipeline(query):
+    """Complete RAG pipeline to retrieve relevant documents and generate a response."""
+    relevant_docs = retrieve_documents(query)
+    response = generate_response(query, relevant_docs)
+    return response
+
+if __name__ == "__main__":
+    test_queries = [
+        "Can I apply for a residence permit if I’m already in Portugal legally but don’t have a visa under Article 62?",
+        "What documents do I need to bring for a D7 visa application?",
+        "Is it possible to switch from a tourist visa to a residence permit while in Portugal?",
+        "What are the requirements for family reunification under Portuguese immigration law?",
+        "How long does the SEF process take after submitting a residence permit application?"
+    ]
+
+    for i, query in enumerate(test_queries, 1):
+        print(f"\n=== Test #{i}: {query} ===")
+        response = rag_pipeline(query)
+        print(f"\n🧠 Response:\n{response}\n")
+
