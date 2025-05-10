@@ -97,7 +97,7 @@ def generate_response(query, documents, max_context=7):
     with torch.no_grad():
         outputs = generator.model.generate(
             **inputs,
-            max_length=800,
+            max_length=800+,
             num_beams=5,  # Increase beams for better response generation
             do_sample=True,  # Enable sampling to use temperature
             temperature=0.7,  # Control the randomness in the output
@@ -115,4 +115,3 @@ def rag_pipeline(query):
 if __name__ == "__main__":
     query = "Can I apply for a residence permit if I’m already in Portugal legally but don’t have a visa under Article 62?"
     print("\n🧠 Response:\n", rag_pipeline(query))
-

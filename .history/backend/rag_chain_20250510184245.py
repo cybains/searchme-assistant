@@ -116,3 +116,5 @@ if __name__ == "__main__":
     query = "Can I apply for a residence permit if I’m already in Portugal legally but don’t have a visa under Article 62?"
     print("\n🧠 Response:\n", rag_pipeline(query))
 
+
+pip freeze > requirements.txt

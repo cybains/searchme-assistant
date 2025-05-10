@@ -4,4 +4,4 @@ __pycache__/
 smai/
 data/
 *.pyc
-.ipynb
+.i[

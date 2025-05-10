@@ -72,16 +72,15 @@ def format_prompt(context_docs, user_query):
     """Format the prompt by including the context and user query."""
     context = "\n\n".join(context_docs)
     prompt = f"""
-You are a helpful assistant specialized in Portuguese immigration law.
-
-Use the context below to answer the user's question. If relevant, refer to specific articles (e.g. Article 91 or 62) or conditions (such as proof of legal entry, criminal record checks, or required documents). Respond in clear and natural language.
+You are an assistant answering user questions based on Portuguese immigration laws. 
+Your task is to provide detailed answers based on the following context, and if necessary, reference the specific sections or documents.
 
 Context:
 {context}
 
-User Question: {user_query}
+Question: {user_query}
 
-Answer:
+Answer with full details, including the validity period, renewal options, and any other relevant information related to student residence permits.
 """
 
     return prompt
@@ -97,7 +96,7 @@ def generate_response(query, documents, max_context=7):
     with torch.no_grad():
         outputs = generator.model.generate(
             **inputs,
-            max_length=800,
+            max_length=600,
             num_beams=5,  # Increase beams for better response generation
             do_sample=True,  # Enable sampling to use temperature
             temperature=0.7,  # Control the randomness in the output
@@ -115,4 +114,3 @@ def rag_pipeline(query):
 if __name__ == "__main__":
     query = "Can I apply for a residence permit if I’m already in Portugal legally but don’t have a visa under Article 62?"
     print("\n🧠 Response:\n", rag_pipeline(query))
-
