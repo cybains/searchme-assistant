@@ -12,9 +12,8 @@ import torch
 # Constants
 DATA_FOLDER = "data/"
 VECTORSTORE_PATH = "vectorstore/faiss.index"
-DOCUMENTS_PATH = "vectorstore/documents.txt"
 EMBEDDING_MODEL = 'BAAI/bge-base-en-v1.5'
-MODEL_NAME = 'google/flan-t5-large'
+MODEL_NAME = 'google/flan-t5-large'  # For example
 
 # Load models
 embed_model = SentenceTransformer(EMBEDDING_MODEL)
@@ -31,7 +30,7 @@ def clean_text(text):
     return text.strip()
 
 def preprocess_and_chunk(text, chunk_size=500, overlap=100):
-    """Preprocess the text and split it into overlapping chunks."""
+    """Preprocess the text and split it into chunks."""
     sentences = re.split(r'(?<=[.!?]) +', text.strip())
     chunks, current_chunk = [], ""
     for sentence in sentences:
@@ -43,6 +42,7 @@ def preprocess_and_chunk(text, chunk_size=500, overlap=100):
     if current_chunk:
         chunks.append(current_chunk.strip())
 
+    # Add overlaps
     overlapped_chunks = []
     for i in range(0, len(chunks), 1):
         chunk = ' '.join(chunks[max(0, i - 1):i + 1])
@@ -51,56 +51,72 @@ def preprocess_and_chunk(text, chunk_size=500, overlap=100):
     return overlapped_chunks
 
 def embed_documents(documents):
-    """Generate embeddings with instruction tuning (BGE)."""
-    instruction = "Represent this document for retrieval: "
-    formatted_docs = [instruction + doc for doc in documents]
-    return embed_model.encode(formatted_docs, convert_to_tensor=True)
+    """Generate embeddings for the documents."""
+    return embed_model.encode(documents, convert_to_tensor=True)
 
 def retrieve_documents(query, top_k=5):
-    """Retrieve top-k relevant documents using FAISS and BGE formatting."""
+    """Retrieve the top_k relevant documents for the query."""
     start_time = time.time()
 
-    with open(DOCUMENTS_PATH, "r", encoding="utf-8") as f:
+    with open("vectorstore/documents.txt", "r", encoding="utf-8") as f:
         all_chunks = f.readlines()
 
-    query_instruction = "Represent this sentence for retrieval: "
-    query_embedding = embed_model.encode([query_instruction + query], convert_to_tensor=False)
+    query_embedding = embed_model.encode([query], convert_to_tensor=False)
     distances, indices = index.search(np.array(query_embedding), top_k)
 
     retrieved_docs = []
-    print("\n📚 Top Retrieved Chunks:")
-    for idx in indices[0]:
+    for i, (idx, score) in enumerate(zip(indices[0], distances[0])):
         chunk = clean_text(all_chunks[idx])
         retrieved_docs.append(chunk)
-        print(f"- {chunk[:100]}...")  # Preview first 100 characters
 
     end_time = time.time()
     print(f"🔎 Document Retrieval Time: {end_time - start_time:.2f} seconds")
 
     return retrieved_docs
 
+
+
+
+
 def format_prompt(context_docs, user_query):
-    """Format the prompt using retrieved context and user query."""
+    """Format the prompt by including the context and user query."""
+    
+    # Join the context documents into a single string
     context = "\n\n".join(context_docs)
+    
+    # Possible variations in response starters
     response_starters = [
-        "You need", "To move forward, you need", "It’s essential to",
-        "In order to proceed, you need", "The next step is",
-        "Here’s what you should do", "You’ll want to make sure you have",
-        "To get started, you need", "The required steps are"
+        "You need",
+        "To move forward, you need",
+        "It’s essential to",
+        "In order to proceed, you need",
+        "The next step is",
+        "Here’s what you should do",
+        "You’ll want to make sure you have",
+        "To get started, you need",
+        "The required steps are"
     ]
+    
+    # Randomly choose one response starter
     response_start = random.choice(response_starters)
-
+    
+    # Create the prompt template with more detailed instructions
     prompt = f"""
-You are a solution finder based on the context provided.
+You are a solution finder based on the context provided. 
 
-Your task is to answer the user's question clearly and in detail, using the context provided.
+Your task is to answer the user's question clearly and in detail, using the context provided. Follow these guidelines:
+and grammatically correct and also provide list whenever required to list documents or requirements. 
 
-Guidelines:
-1. State the source of the information if available.
-2. Be grammatically correct and comprehensive.
-3. Provide lists when necessary (e.g., for required documents).
+1. Try to state the source of the information.
+Provide a clear Yes or No answer based on the context of the question. But never say "yes" or "no" directly. Instead, use phrases like "It is possible to..." or "It is not possible to...".
 
+2. Be gramqClarify any conditions or restrictions that may apply in this case, offering an explanation of the possibility or limitations of the action.
 
+3. Specify the relevant law or regulation under which this action falls, referring to any legal framework, articles, or rules governing the process.
+
+4. If the action is possible, provide a list of actionable steps the user needs to follow, including necessary documents, procedures, or contacts.
+
+5. End with an open-ended question to encourage the user to ask for further clarification or additional information.
 Context:
 {context}
 
@@ -108,41 +124,48 @@ User Question: {user_query}
 
 Answer: {response_start}
 """
+
     return prompt
 
-def generate_response(query, documents, max_context=5):
-    """Generate an answer using the retrieved context and FLAN-T5."""
-    selected_docs = documents[:max_context]
+
+def generate_response(query, documents, max_context=7):
+    selected_docs = documents[:max_context]  # Grab more documents to provide a better context
     prompt = format_prompt(selected_docs, query)
 
+    # Increase the max_length for tokenization to accommodate larger prompts
     inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=1024, padding=True)
     inputs = {k: v.to(generator.model.device) for k, v in inputs.items()}
 
-    start_time = time.time()
+    start_time = time.time()  # Start timing here
+
     with torch.no_grad():
         outputs = generator.model.generate(
             **inputs,
-            max_length=500,
-            num_beams=5,
-            do_sample=True,
-            temperature=0.5,
+            max_length=800,
+            num_beams=5,  # Increase beams for better response generation
+            do_sample=True,  # Enable sampling to use temperature
+            temperature=0.7,  # Control the randomness in the output
             early_stopping=True,
         )
-    end_time = time.time()
+
+    end_time = time.time()  # End timing here
     print(f"🕒 Response Generation Time: {end_time - start_time:.2f} seconds")
 
     return tokenizer.decode(outputs[0], skip_special_tokens=True)
 
 def rag_pipeline(query):
-    """Full RAG pipeline from query to answer."""
+    """Complete RAG pipeline to retrieve relevant documents and generate a response."""
     start_time = time.time()
+
     relevant_docs = retrieve_documents(query)
     response = generate_response(query, relevant_docs)
+
     end_time = time.time()
     print(f"⏱️ Total RAG Pipeline Time: {end_time - start_time:.2f} seconds")
+
     return response
 
-# Testing with sample queries
+
 if __name__ == "__main__":
     test_queries = [
         "Can I apply for a residence permit if I'm doing volunteer work in Portugal?",
@@ -183,3 +206,4 @@ if __name__ == "__main__":
         print(f"\n=== Test #{i}: {query} ===")
         response = rag_pipeline(query)
         print(f"\n🧠 Response:\n{response}\n")
+

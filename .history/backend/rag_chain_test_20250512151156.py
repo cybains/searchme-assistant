@@ -30,31 +30,61 @@ def clean_text(text):
     text = re.sub(r'\s+', ' ', text)
     return text.strip()
 
-def preprocess_and_chunk(text, chunk_size=500, overlap=100):
-    """Preprocess the text and split it into overlapping chunks."""
-    sentences = re.split(r'(?<=[.!?]) +', text.strip())
-    chunks, current_chunk = [], ""
-    for sentence in sentences:
-        if len(current_chunk) + len(sentence) <= chunk_size:
-            current_chunk += " " + sentence
-        else:
-            chunks.append(current_chunk.strip())
-            current_chunk = sentence
-    if current_chunk:
-        chunks.append(current_chunk.strip())
+def preprocess_and_chunk(text, chunk_size=500, overlap=100, tokenizer=None):
+    """Preprocess and tokenize text into overlapping chunks based on token count."""
+    assert tokenizer is not None, "Tokenizer must be provided."
 
-    overlapped_chunks = []
-    for i in range(0, len(chunks), 1):
-        chunk = ' '.join(chunks[max(0, i - 1):i + 1])
-        if chunk not in overlapped_chunks:
-            overlapped_chunks.append(chunk)
-    return overlapped_chunks
+    # Clean and tokenize the text into sentences
+    text = clean_text(text)
+    sentences = nltk.sent_tokenize(text)
+
+    chunks, current_chunk = [], []
+    current_length = 0
+
+    # Iterate through sentences and build chunks
+    for sentence in sentences:
+        tokenized = tokenizer.encode(sentence, add_special_tokens=False)
+        token_length = len(tokenized)
+
+        # Add the sentence to the current chunk if within the token limit
+        if current_length + token_length <= chunk_size:
+            current_chunk.append(sentence)
+            current_length += token_length
+        else:
+            # If the chunk exceeds, finalize the current chunk and start a new one
+            chunks.append(' '.join(current_chunk))
+
+            if overlap > 0:
+                # If overlap is required, keep the overlap part from the previous chunk
+                prev_tokens = tokenizer.encode(' '.join(current_chunk), add_special_tokens=False)
+                overlap_tokens = prev_tokens[-overlap:]
+                overlap_text = tokenizer.decode(overlap_tokens, skip_special_tokens=True)
+                current_chunk = [overlap_text, sentence]
+                current_length = len(tokenizer.encode(' '.join(current_chunk), add_special_tokens=False))
+            else:
+                # No overlap, just start a new chunk
+                current_chunk = [sentence]
+                current_length = token_length
+
+    # Append the last chunk if it's non-empty
+    if current_chunk:
+        chunks.append(' '.join(current_chunk))
+
+    return chunks
 
 def embed_documents(documents):
     """Generate embeddings with instruction tuning (BGE)."""
     instruction = "Represent this document for retrieval: "
     formatted_docs = [instruction + doc for doc in documents]
-    return embed_model.encode(formatted_docs, convert_to_tensor=True)
+    
+    # Apply the new chunking process here
+    chunks = []
+    for doc in formatted_docs:
+        doc_chunks = preprocess_and_chunk(doc, chunk_size=500, overlap=100, tokenizer=tokenizer)
+        chunks.extend(doc_chunks)
+    
+    return embed_model.encode(chunks, convert_to_tensor=True)
+
 
 def retrieve_documents(query, top_k=5):
     """Retrieve top-k relevant documents using FAISS and BGE formatting."""
@@ -110,7 +140,7 @@ Answer: {response_start}
 """
     return prompt
 
-def generate_response(query, documents, max_context=5):
+def generate_response(query, documents, max_context=7):
     """Generate an answer using the retrieved context and FLAN-T5."""
     selected_docs = documents[:max_context]
     prompt = format_prompt(selected_docs, query)
@@ -122,10 +152,10 @@ def generate_response(query, documents, max_context=5):
     with torch.no_grad():
         outputs = generator.model.generate(
             **inputs,
-            max_length=500,
+            max_length=800,
             num_beams=5,
             do_sample=True,
-            temperature=0.5,
+            temperature=0.7,
             early_stopping=True,
         )
     end_time = time.time()

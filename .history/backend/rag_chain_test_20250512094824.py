@@ -99,7 +99,7 @@ Guidelines:
 1. State the source of the information if available.
 2. Be grammatically correct and comprehensive.
 3. Provide lists when necessary (e.g., for required documents).
-
+4. Promote further inquiry by including relevant next steps or options.
 
 Context:
 {context}
@@ -110,7 +110,7 @@ Answer: {response_start}
 """
     return prompt
 
-def generate_response(query, documents, max_context=5):
+def generate_response(query, documents, max_context=7):
     """Generate an answer using the retrieved context and FLAN-T5."""
     selected_docs = documents[:max_context]
     prompt = format_prompt(selected_docs, query)
@@ -122,10 +122,10 @@ def generate_response(query, documents, max_context=5):
     with torch.no_grad():
         outputs = generator.model.generate(
             **inputs,
-            max_length=500,
+            max_length=800,
             num_beams=5,
             do_sample=True,
-            temperature=0.5,
+            temperature=0.7,
             early_stopping=True,
         )
     end_time = time.time()
@@ -183,3 +183,11 @@ if __name__ == "__main__":
         print(f"\n=== Test #{i}: {query} ===")
         response = rag_pipeline(query)
         print(f"\n🧠 Response:\n{response}\n")
+
+if __name__ == "__main__":
+    
+    for i, query in enumerate(test_queries, 1):
+        print(f"\n=== Test #{i}: {query} ===")
+        response = rag_pipeline(query)
+        print(f"\n🧠 Response:\n{response}\n")
+

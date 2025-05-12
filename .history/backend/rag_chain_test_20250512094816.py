@@ -99,7 +99,7 @@ Guidelines:
 1. State the source of the information if available.
 2. Be grammatically correct and comprehensive.
 3. Provide lists when necessary (e.g., for required documents).
-
+4. Promote further inquiry by including relevant next steps or options.
 
 Context:
 {context}
@@ -110,7 +110,7 @@ Answer: {response_start}
 """
     return prompt
 
-def generate_response(query, documents, max_context=5):
+def generate_response(query, documents, max_context=7):
     """Generate an answer using the retrieved context and FLAN-T5."""
     selected_docs = documents[:max_context]
     prompt = format_prompt(selected_docs, query)
@@ -122,10 +122,10 @@ def generate_response(query, documents, max_context=5):
     with torch.no_grad():
         outputs = generator.model.generate(
             **inputs,
-            max_length=500,
+            max_length=800,
             num_beams=5,
             do_sample=True,
-            temperature=0.5,
+            temperature=0.7,
             early_stopping=True,
         )
     end_time = time.time()
@@ -146,40 +146,20 @@ def rag_pipeline(query):
 if __name__ == "__main__":
     test_queries = [
         "Can I apply for a residence permit if I'm doing volunteer work in Portugal?",
-    "What documents are required for a residence permit for volunteering?",
-    "Is the volunteer work permit valid for more than one year?",
-    "Can a volunteer residence permit be renewed?",
-    "Do I need health insurance to apply for a volunteering residence permit?",
-    "What must be included in the volunteer contract?",
-    "Can I be paid for the volunteer work under this permit?",
-    "Is a criminal record check from my home country required?",
-    "Do I need to show proof of accommodation to apply for this permit?",
-    "Can someone already in Portugal legally apply for a volunteer residence permit?",
-    "Can this residence permit be denied if I have a security alert in the SIS?",
-    "Can high school students get a residence permit for exchange programs in Portugal?",
-    "What documents are needed for a high school mobility residence permit?",
-    "Is parental consent required for minors in exchange programs?",
-    "Can I stay in Portugal after my high school exchange ends?",
-    "Is this permit renewable after the program ends?",
-    "Do I need a host family confirmation for this permit?",
-    "Does the high school permit require proof of health insurance?",
-    "What kind of proof of accommodation is needed for high school exchange students?",
-    "Do I need to provide the name and address of my host family?",
-    "Can this residence permit be applied for while already in Portugal?",
-    "Can I get a residence permit for an internship in Portugal?",
-    "What documents are needed for an internship residence permit?",
-    "Is the internship supposed to be unpaid to qualify for the permit?",
-    "Can I apply for an internship residence permit from inside Portugal?",
-    "Is the internship residence permit valid for more than one year?",
-    "Can I renew my internship permit if my program continues?",
-    "What must be included in the internship contract?",
-    "Do I need to show financial means for an internship permit?",
-    "Do I need a Portuguese criminal record check for this permit?",
-    "Will a criminal record from my country affect my application?",
-    "Can I still apply if I don't have a visa but entered Portugal legally?"
+        "What documents are required for a residence permit for volunteering?",
+        "Can I be paid for the volunteer work under this permit?",
+        "Do I need health insurance to apply for a volunteering residence permit?"
     ]
 
     for i, query in enumerate(test_queries, 1):
         print(f"\n=== Test #{i}: {query} ===")
         response = rag_pipeline(query)
         print(f"\n🧠 Response:\n{response}\n")
+
+if __name__ == "__main__":
+    
+    for i, query in enumerate(test_queries, 1):
+        print(f"\n=== Test #{i}: {query} ===")
+        response = rag_pipeline(query)
+        print(f"\n🧠 Response:\n{response}\n")
+

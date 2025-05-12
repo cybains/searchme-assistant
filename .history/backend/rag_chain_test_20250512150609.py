@@ -1,13 +1,18 @@
-import time
 import os
 import re
+import time
 import random
 import faiss
 import numpy as np
 import textwrap
+import nltk
+from nltk.tokenize import sent_tokenize
 from transformers import pipeline, AutoModelForSeq2SeqLM, AutoTokenizer
 from sentence_transformers import SentenceTransformer
 import torch
+
+# Download required NLTK data
+nltk.download('punkt')
 
 # Constants
 DATA_FOLDER = "data/"
@@ -21,8 +26,11 @@ embed_model = SentenceTransformer(EMBEDDING_MODEL)
 generator = pipeline('text2text-generation', model=MODEL_NAME, device=0 if torch.cuda.is_available() else -1)
 tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
 
-# Load FAISS index
-index = faiss.read_index(VECTORSTORE_PATH)
+# Load FAISS index (create if doesn't exist)
+if os.path.exists(VECTORSTORE_PATH):
+    index = faiss.read_index(VECTORSTORE_PATH)
+else:
+    index = faiss.IndexFlatL2(embed_model.get_sentence_embedding_dimension())
 
 def clean_text(text):
     """Clean up the text by removing extra spaces and line breaks."""
@@ -30,41 +38,78 @@ def clean_text(text):
     text = re.sub(r'\s+', ' ', text)
     return text.strip()
 
-def preprocess_and_chunk(text, chunk_size=500, overlap=100):
-    """Preprocess the text and split it into overlapping chunks."""
-    sentences = re.split(r'(?<=[.!?]) +', text.strip())
-    chunks, current_chunk = [], ""
-    for sentence in sentences:
-        if len(current_chunk) + len(sentence) <= chunk_size:
-            current_chunk += " " + sentence
-        else:
-            chunks.append(current_chunk.strip())
-            current_chunk = sentence
-    if current_chunk:
-        chunks.append(current_chunk.strip())
+def preprocess_and_chunk(text, chunk_size=500, overlap=100, tokenizer=None):
+    """Preprocess and tokenize text into overlapping chunks based on token count."""
+    assert tokenizer is not None, "Tokenizer must be provided."
 
-    overlapped_chunks = []
-    for i in range(0, len(chunks), 1):
-        chunk = ' '.join(chunks[max(0, i - 1):i + 1])
-        if chunk not in overlapped_chunks:
-            overlapped_chunks.append(chunk)
-    return overlapped_chunks
+    text = clean_text(text)
+    sentences = sent_tokenize(text)
+
+    chunks, current_chunk = [], []
+    current_length = 0
+
+    for sentence in sentences:
+        tokenized = tokenizer.encode(sentence, add_special_tokens=False)
+        token_length = len(tokenized)
+
+        if current_length + token_length <= chunk_size:
+            current_chunk.append(sentence)
+            current_length += token_length
+        else:
+            chunks.append(' '.join(current_chunk))
+
+            if overlap > 0:
+                prev_tokens = tokenizer.encode(' '.join(current_chunk), add_special_tokens=False)
+                overlap_tokens = prev_tokens[-overlap:]
+                overlap_text = tokenizer.decode(overlap_tokens, skip_special_tokens=True)
+                current_chunk = [overlap_text, sentence]
+                current_length = len(tokenizer.encode(' '.join(current_chunk), add_special_tokens=False))
+            else:
+                current_chunk = [sentence]
+                current_length = token_length
+
+    if current_chunk:
+        chunks.append(' '.join(current_chunk))
+
+    return chunks
 
 def embed_documents(documents):
     """Generate embeddings with instruction tuning (BGE)."""
     instruction = "Represent this document for retrieval: "
     formatted_docs = [instruction + doc for doc in documents]
-    return embed_model.encode(formatted_docs, convert_to_tensor=True)
+    return embed_model.encode(formatted_docs, convert_to_numpy=True)
+
+def build_faiss_index():
+    """Process all documents in data/ and build FAISS index."""
+    all_chunks = []
+    for filename in os.listdir(DATA_FOLDER):
+        if filename.endswith(".txt"):
+            path = os.path.join(DATA_FOLDER, filename)
+            with open(path, 'r', encoding='utf-8') as f:
+                text = f.read()
+                chunks = preprocess_and_chunk(text, tokenizer=tokenizer)
+                all_chunks.extend(chunks)
+
+    print(f"📚 Total Chunks: {len(all_chunks)}")
+
+    embeddings = embed_documents(all_chunks)
+    faiss_index = faiss.IndexFlatL2(embeddings.shape[1])
+    faiss_index.add(embeddings)
+
+    # Save index
+    faiss.write_index(faiss_index, VECTORSTORE_PATH)
+    with open(DOCUMENTS_PATH, "w", encoding="utf-8") as f:
+        for chunk in all_chunks:
+            f.write(chunk + "\n")
+    print("✅ FAISS index and document chunks saved.")
 
 def retrieve_documents(query, top_k=5):
     """Retrieve top-k relevant documents using FAISS and BGE formatting."""
-    start_time = time.time()
-
     with open(DOCUMENTS_PATH, "r", encoding="utf-8") as f:
         all_chunks = f.readlines()
 
     query_instruction = "Represent this sentence for retrieval: "
-    query_embedding = embed_model.encode([query_instruction + query], convert_to_tensor=False)
+    query_embedding = embed_model.encode([query_instruction + query], convert_to_numpy=True)
     distances, indices = index.search(np.array(query_embedding), top_k)
 
     retrieved_docs = []
@@ -72,23 +117,19 @@ def retrieve_documents(query, top_k=5):
     for idx in indices[0]:
         chunk = clean_text(all_chunks[idx])
         retrieved_docs.append(chunk)
-        print(f"- {chunk[:100]}...")  # Preview first 100 characters
-
-    end_time = time.time()
-    print(f"🔎 Document Retrieval Time: {end_time - start_time:.2f} seconds")
+        print(f"- {chunk[:100]}...")
 
     return retrieved_docs
 
 def format_prompt(context_docs, user_query):
-    """Format the prompt using retrieved context and user query."""
     context = "\n\n".join(context_docs)
-    response_starters = [
+    starters = [
         "You need", "To move forward, you need", "It’s essential to",
         "In order to proceed, you need", "The next step is",
         "Here’s what you should do", "You’ll want to make sure you have",
         "To get started, you need", "The required steps are"
     ]
-    response_start = random.choice(response_starters)
+    start = random.choice(starters)
 
     prompt = f"""
 You are a solution finder based on the context provided.
@@ -100,18 +141,16 @@ Guidelines:
 2. Be grammatically correct and comprehensive.
 3. Provide lists when necessary (e.g., for required documents).
 
-
 Context:
 {context}
 
 User Question: {user_query}
 
-Answer: {response_start}
+Answer: {start}
 """
     return prompt
 
-def generate_response(query, documents, max_context=5):
-    """Generate an answer using the retrieved context and FLAN-T5."""
+def generate_response(query, documents, max_context=7):
     selected_docs = documents[:max_context]
     prompt = format_prompt(selected_docs, query)
 
@@ -122,10 +161,10 @@ def generate_response(query, documents, max_context=5):
     with torch.no_grad():
         outputs = generator.model.generate(
             **inputs,
-            max_length=500,
+            max_length=800,
             num_beams=5,
             do_sample=True,
-            temperature=0.5,
+            temperature=0.7,
             early_stopping=True,
         )
     end_time = time.time()
@@ -134,7 +173,6 @@ def generate_response(query, documents, max_context=5):
     return tokenizer.decode(outputs[0], skip_special_tokens=True)
 
 def rag_pipeline(query):
-    """Full RAG pipeline from query to answer."""
     start_time = time.time()
     relevant_docs = retrieve_documents(query)
     response = generate_response(query, relevant_docs)
@@ -142,7 +180,13 @@ def rag_pipeline(query):
     print(f"⏱️ Total RAG Pipeline Time: {end_time - start_time:.2f} seconds")
     return response
 
-# Testing with sample queries
+# === Build index once if needed ===
+if not os.path.exists(VECTORSTORE_PATH) or not os.path.exists(DOCUMENTS_PATH):
+    print("⚙️ Building FAISS index from scratch...")
+    build_faiss_index()
+    index = faiss.read_index(VECTORSTORE_PATH)
+
+# === Run test queries ===
 if __name__ == "__main__":
     test_queries = [
         "Can I apply for a residence permit if I'm doing volunteer work in Portugal?",
@@ -183,3 +227,4 @@ if __name__ == "__main__":
         print(f"\n=== Test #{i}: {query} ===")
         response = rag_pipeline(query)
         print(f"\n🧠 Response:\n{response}\n")
+

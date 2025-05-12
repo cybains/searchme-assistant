@@ -122,10 +122,10 @@ def generate_response(query, documents, max_context=5):
     with torch.no_grad():
         outputs = generator.model.generate(
             **inputs,
-            max_length=500,
+            max_length=800,
             num_beams=5,
             do_sample=True,
-            temperature=0.5,
+            temperature=0.7,
             early_stopping=True,
         )
     end_time = time.time()

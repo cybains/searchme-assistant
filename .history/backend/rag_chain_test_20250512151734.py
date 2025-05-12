@@ -125,7 +125,7 @@ def generate_response(query, documents, max_context=5):
             max_length=500,
             num_beams=5,
             do_sample=True,
-            temperature=0.5,
+            temperature=0.7,
             early_stopping=True,
         )
     end_time = time.time()
